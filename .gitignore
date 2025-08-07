@@ -1,0 +1,7 @@
+.env
+tts_output.wav
+.venv
+.ipynb_checkpoints
+__pycache__
+tts.ipynb
+ws_tts.py
