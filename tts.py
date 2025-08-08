@@ -78,38 +78,3 @@ class CartesiaTTS(TTSInterface):
         
         except Exception as e:
             print(f"[TTS] Error synthesizing '{text}': {e}")
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-    import wave
-    load_dotenv()
-    output_wav_path = "tts_output.wav"
-    wav_file = wave.open(output_wav_path, "wb")
-    wav_file.setnchannels(1)                   
-    wav_file.setsampwidth(2)                    
-    wav_file.setframerate(24000)             
-    
-    
-    async def example_usage():
-        tts = CartesiaTTS()
-        text_queue = asyncio.Queue()
-        
-        
-        await text_queue.put("Hello")
-        await text_queue.put("world.")
-        await text_queue.put("END")  
-        
-        print("[TTS] Starting synthesis and saving to file...")
-        total_samples = 0
-        async for audio_chunk in tts.synthesize_stream(text_queue):
-            float32_buffer = np.frombuffer(audio_chunk, dtype='<f4')  # float32
-            int16_buffer = (float32_buffer * 32767).astype(np.int16)  # to int16
-            wav_file.writeframes(int16_buffer.tobytes())
-            total_samples += len(int16_buffer)
-            print(f"[TTS] Wrote {len(int16_buffer)} int16 samples")
-        
-        wav_file.close()
-        duration = total_samples / 24000
-        print(f"[TTS] Saved audio to '{output_wav_path}' ({duration:.2f}s)")
-
-    asyncio.run(example_usage())

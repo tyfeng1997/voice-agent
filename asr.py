@@ -11,7 +11,7 @@ class CartesiaASR(ASRInterface):
     async def transcribe_stream(self, audio_queue: asyncio.Queue) -> AsyncGenerator[str, None]:
         ws = await self.client.stt.websocket(
             model="ink-whisper",
-            language="en",
+            language="zh",
             encoding="pcm_s16le",
             sample_rate=16000,
             min_volume=0.15,
@@ -27,7 +27,6 @@ class CartesiaASR(ASRInterface):
                         await ws.send("done")
                         break
                     await ws.send(chunk)
-                    await asyncio.sleep(0.02)
             except Exception as e:
                 print(f"[ASR Sender] Error: {e}")
 
@@ -80,4 +79,3 @@ class CartesiaASR(ASRInterface):
 
         await sender_task
         await self.client.close()
-
