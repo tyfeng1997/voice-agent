@@ -62,8 +62,9 @@ class CartesiaASR(ASRInterface):
             language="zh",                # Chinese language optimization
             encoding="pcm_s16le",         # 16-bit PCM little-endian format
             sample_rate=16000,            # 16kHz sample rate
-            min_volume=0.15,              # Minimum volume threshold for speech detection
-            max_silence_duration_secs=0.5,  # Maximum silence before finalizing transcript
+            min_volume=0.15,              # Volume threshold for voice activity detection. Audio below this threshold will be considered silence. Range: 0.0-1.0.
+            max_silence_duration_secs=2.0, # Maximum duration of silence (in seconds) before the system considers the utterance complete and triggers endpointing. Higher values allow for longer pauses within utterances.
+
         )
 
         async def sender():
