@@ -18,7 +18,7 @@ from asr import CartesiaASR
 from llm import AnthropicLLM
 from tts import CartesiaTTS
 from audio_player import SoundDeviceAudioPlayer
-
+from conversation_manager import ConversationManager,PipelineState
 # Load environment variables from .env file
 load_dotenv()
 if __name__ == "__main__":
@@ -36,11 +36,12 @@ if __name__ == "__main__":
         
         All stages run concurrently using asyncio.gather() for optimal performance.
         """
+        conversation_manager = ConversationManager()
         # Initialize all pipeline components
         audio_source = RealTimeMicrophoneSource()
-        asr = CartesiaASR()
-        llm = AnthropicLLM()
-        tts = CartesiaTTS()
+        asr = CartesiaASR(conversation_manager=conversation_manager)
+        llm = AnthropicLLM(conversation_manager=conversation_manager)
+        tts = CartesiaTTS(conversation_manager=conversation_manager)
         player = SoundDeviceAudioPlayer()
         
         # Create async queues as buffers between pipeline stages
@@ -83,8 +84,7 @@ if __name__ == "__main__":
             Converts LLM response text into synthesized audio chunks.
             Accumulates text into complete sentences before synthesis.
             """
-            async for audio_chunk in tts.synthesize_stream(response_queue):
-                print(f"[TTS] Generated audio chunk, {len(audio_chunk)}")
+            async for audio_chunk in tts.synthesize_stream(response_queue,tts_chunk_queue):
                 await tts_chunk_queue.put(audio_chunk)
         
         async def player_interface():

@@ -18,6 +18,8 @@ import os
 from cartesia import AsyncCartesia
 from components import ASRInterface
 from typing import AsyncGenerator
+
+from conversation_manager import ConversationManager, PipelineState
 class CartesiaASR(ASRInterface):
     """
     Cartesia-powered Automatic Speech Recognition implementation.
@@ -34,12 +36,16 @@ class CartesiaASR(ASRInterface):
     - WebSocket-based communication for low latency
     """
     
-    def __init__(self):
+    def __init__(self,
+                 conversation_manager: ConversationManager
+                 ):
         """
         Initialize the Cartesia ASR client.
         
         Requires CARTESIA_API_KEY environment variable to be set.
         """
+        self.conversation_manager = conversation_manager
+        self.current_session_id=0
         self.client = AsyncCartesia(api_key=os.getenv("CARTESIA_API_KEY"))
 
     async def transcribe_stream(self, audio_queue: asyncio.Queue) -> AsyncGenerator[str, None]:
@@ -96,7 +102,16 @@ class CartesiaASR(ASRInterface):
                     if result['type'] == 'transcript':
                         text = result['text'].strip()
                         is_final = result.get('is_final', False)
-                        
+                        if text:
+                            if self.conversation_manager:
+                                current_state = self.conversation_manager.state
+                                if current_state == PipelineState.RESPONDING:
+                                    print(f"[ASR] User speaking detected during response, triggering interrupt...")
+                                    await self.conversation_manager.trigger_interrupt()
+                                    # 🔥 等待中断完成后再继续
+                                    print(f"[ASR] Interrupt completed, continuing with new input...")
+                                self.current_session_id = self.conversation_manager.get_current_session_id()
+
                         # Process word-level timestamps if available
                         if 'words' in result and result['words']:
                             word_timestamps = result['words']
@@ -115,9 +130,9 @@ class CartesiaASR(ASRInterface):
                             continue
                         if is_final:
                             full_transcript += text + " "
-                            # Yield control to allow other tasks to run
-                            await asyncio.sleep(0)
-                            # Send final transcription to next pipeline stage
+                            if self.conversation_manager:
+                                if self.current_session_id == self.conversation_manager.get_current_session_id():
+                                    self.conversation_manager.set_state(PipelineState.PROCESSING)
                             yield text
                         else:
                             # Optional: could yield partial results for real-time feedback

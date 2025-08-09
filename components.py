@@ -90,7 +90,7 @@ class TTSInterface(ABC):
     """
     
     @abstractmethod
-    async def synthesize_stream(self, text_queue: asyncio.Queue) -> AsyncGenerator[bytes, None]:
+    async def synthesize_stream(self, text_queue: asyncio.Queue, audio_queue: asyncio.Queue) -> AsyncGenerator[bytes, None]:
         """
         Convert text to synthesized speech audio.
         

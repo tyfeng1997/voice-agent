@@ -18,7 +18,7 @@ import os
 from anthropic import AsyncAnthropic
 from components import LLMInterface
 from typing import AsyncGenerator, List, Dict
-
+from conversation_manager import ConversationManager, PipelineState
 class AnthropicLLM(LLMInterface):
     """
     Anthropic Claude-powered Language Model implementation.
@@ -35,7 +35,11 @@ class AnthropicLLM(LLMInterface):
     - Error handling and graceful degradation
     """
     
-    def __init__(self, timeout: float = 1.0, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, 
+                 timeout: float = 1.0,
+                 model: str = "claude-sonnet-4-20250514",
+                 conversation_manager: ConversationManager=None
+                 ):
         """
         Initialize the Anthropic LLM client.
         
@@ -43,6 +47,10 @@ class AnthropicLLM(LLMInterface):
             timeout: Seconds to wait for more text before considering utterance complete
             model: Anthropic model name to use for generation
         """
+        self.conversation_manager = conversation_manager
+        self.current_session_id = 0
+        
+        
         self.timeout = timeout
         self.model = model
         self.api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -95,12 +103,31 @@ class AnthropicLLM(LLMInterface):
 
             # Step 3: Generate streaming response if we have valid input
             if buffer.strip():
+                # 🔥 记录当前session
+                session_id = self.conversation_manager.get_current_session_id() if self.conversation_manager else 0
+                self.current_session_id = session_id
+                
+                
                 try:
+                    if self.conversation_manager:
+                        self.conversation_manager.set_state(PipelineState.RESPONDING)
+                   
                     async for chunk in self._generate_anthropic_stream(buffer):
+                        if (self.conversation_manager and
+                            self.conversation_manager.get_current_session_id() != session_id):
+                            print(f"[LLM] Session expired ({session_id} -> {self.conversation_manager.get_current_session_id()}), stopping...")
+                            break
+                        if self.conversation_manager and self.conversation_manager.interrupt_event.is_set():
+                            print("[LLM] Interrupted! Stopping generation...")
+                            break
                         yield chunk
                 except Exception as e:
                     print(f"[LLM] Error generating response: {e}")
                     yield "I'm sorry, I encountered an error processing your request. "
+                finally:
+                    # 🔥 报告清理完成
+                    if self.conversation_manager:
+                        self.conversation_manager.signal_cleanup_complete('llm')
 
     async def _generate_anthropic_stream(self, user_input: str) -> AsyncGenerator[str, None]:
         """

@@ -19,7 +19,7 @@ from cartesia import AsyncCartesia
 from components import TTSInterface
 from typing import AsyncGenerator
 import os
-
+from conversation_manager import ConversationManager, PipelineState
 class CartesiaTTS(TTSInterface):
     """
     Cartesia-powered Text-to-Speech synthesis implementation.
@@ -36,7 +36,11 @@ class CartesiaTTS(TTSInterface):
     - WebSocket-based communication for low latency
     """
     
-    def __init__(self, sample_rate: int = 24000, voice_id: str = "a0e99841-438c-4a64-b679-ae501e7d6091"):
+    def __init__(self, 
+                 sample_rate: int = 24000, 
+                 voice_id: str = "a0e99841-438c-4a64-b679-ae501e7d6091",
+                 conversation_manager: ConversationManager = None
+                 ):
         """
         Initialize the Cartesia TTS client.
         
@@ -52,7 +56,9 @@ class CartesiaTTS(TTSInterface):
         self.voice_id = voice_id
         self.client = AsyncCartesia(api_key=self.api_key)
 
-    async def synthesize_stream(self, text_queue: asyncio.Queue) -> AsyncGenerator[bytes, None]:
+        self.conversation_manager = conversation_manager
+        self.current_session_id = 0
+    async def synthesize_stream(self, text_queue: asyncio.Queue, audio_queue: asyncio.Queue) -> AsyncGenerator[bytes, None]:
         """
         Convert streaming text to synthesized speech audio.
         
@@ -70,6 +76,10 @@ class CartesiaTTS(TTSInterface):
         
         while True:
             try:
+                # 🔥 记录当前session
+                session_id = self.conversation_manager.get_current_session_id() if self.conversation_manager else 0
+                self.current_session_id = session_id
+                
                 # Get next text chunk from LLM
                 text = await text_queue.get()
                 # Accumulate text into buffer
@@ -79,14 +89,29 @@ class CartesiaTTS(TTSInterface):
                 # Check if we should synthesize the current buffer
                 if self._should_send(buffer):
                     async for audio_chunk in self._synthesize_sentence(buffer):
+                        if (self.conversation_manager and 
+                            self.conversation_manager.get_current_session_id() != session_id):
+                            print(f"[TTS] Session expired, stopping synthesis...")
+                            break
+                        # 🔥 检查中断信号
+                        if self.conversation_manager and self.conversation_manager.interrupt_event.is_set():
+                            print("[TTS] Interrupted! Clearing buffer and stopping synthesis...")
+                            # 🔥 清空文本队列
+                            await self._clear_text_queue(text_queue)
+                            await self._clear_text_queue(audio_queue)
+                            
+                            break
                         yield audio_chunk
                     buffer = ""  # Reset buffer after synthesis
             
             except Exception as e:
                 print(f"[TTS] Error in text accumulation: {e}")
                 continue
+            finally:
+                # 🔥 报告清理完成
+                if self.conversation_manager:
+                    self.conversation_manager.signal_cleanup_complete('tts')
         
-        print("[TTS] Synthesis completed.")
     def _should_send(self, text: str) -> bool:
         """
         Determine if accumulated text should be sent for synthesis.
@@ -141,3 +166,14 @@ class CartesiaTTS(TTSInterface):
         
         except Exception as e:
             print(f"[TTS] Error synthesizing '{text}': {e}")
+    
+    async def _clear_text_queue(self, text_queue: asyncio.Queue):
+        """清空文本队列"""
+        cleared_count = 0
+        while not text_queue.empty():
+            try:
+                text_queue.get_nowait()
+                cleared_count += 1
+            except asyncio.QueueEmpty:
+                break
+        print(f"[TTS] Cleared {cleared_count} text chunks from queue")
