@@ -57,7 +57,6 @@ if __name__ == "__main__":
             """
             async for chunk in audio_source.stream_audio():
                 await audio_queue.put(chunk)
-            await audio_queue.put("END")
 
         async def text_producer():
             """
@@ -67,7 +66,6 @@ if __name__ == "__main__":
             """
             async for text in asr.transcribe_stream(audio_queue):
                 await text_queue.put(text)
-            await text_queue.put("END")
 
         async def llm_interface():
             """
@@ -78,7 +76,6 @@ if __name__ == "__main__":
             async for response_text in llm.generate_stream(text_queue):
                 print(f"[LLM] Generated response: {response_text}")
                 await response_queue.put(response_text)
-            await response_queue.put("END")
 
         async def tts_interface():
             """

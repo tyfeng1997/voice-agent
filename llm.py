@@ -76,10 +76,6 @@ class AnthropicLLM(LLMInterface):
             # Step 1: Wait for the first text fragment
             try:
                 first_text = await text_queue.get()
-                # Check for end signal
-                if first_text == "END":
-                    print("[LLM] Received END signal")
-                    break
                 buffer = first_text.strip()
                 print(f"[LLM] First text: '{buffer}'")
             except asyncio.QueueEmpty:
@@ -90,9 +86,6 @@ class AnthropicLLM(LLMInterface):
                 try:
                     # Non-blocking attempt to get more text with timeout
                     more_text = await asyncio.wait_for(text_queue.get(), timeout=self.timeout)
-                    if more_text == "END":
-                        print(f"[LLM] Got END signal with accumulated text: '{buffer}'")
-                        break
                     buffer += " " + more_text.strip()
                     print(f"[LLM] Accumulated: '{buffer}'")
                 except asyncio.TimeoutError:

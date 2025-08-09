@@ -222,11 +222,6 @@ class SoundDeviceAudioPlayer(AudioPlayer):
                 try:
                     # Get next audio chunk from TTS
                     audio_chunk = await audio_queue.get()
-                    
-                    if audio_chunk == "END":
-                        print("[AudioPlayer] Received END signal")
-                        break
-                    
                     # Process audio data based on input format
                     if isinstance(audio_chunk, bytes):
                         # Convert bytes to numpy array based on expected format

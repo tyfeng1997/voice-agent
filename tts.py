@@ -72,14 +72,6 @@ class CartesiaTTS(TTSInterface):
             try:
                 # Get next text chunk from LLM
                 text = await text_queue.get()
-                
-                if text == "END":
-                    # End signal received - synthesize any remaining text
-                    if buffer.strip():
-                        async for chunk in self._synthesize_sentence(buffer):
-                            yield chunk
-                    break
-                
                 # Accumulate text into buffer
                 buffer += " " + text.strip() if buffer else text.strip()
                 print(f"[TTS] Accumulated text: '{buffer}'")

@@ -77,11 +77,6 @@ class CartesiaASR(ASRInterface):
             try:
                 while True:
                     chunk = await audio_queue.get()
-                    if chunk == "END":
-                        # Signal end of audio stream
-                        await ws.send("finalize")
-                        await ws.send("done")
-                        break
                     await ws.send(chunk)
             except Exception as e:
                 print(f"[ASR Sender] Error: {e}")
